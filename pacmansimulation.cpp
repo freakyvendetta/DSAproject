@@ -192,6 +192,7 @@ void initialize(int currentLevel) {
     res = 0;
     invincible = false;
     invincibleEndTime = 0;
+    invincibleTimeLeft = 0;
 
     for (int i = 0; i < HEIGHT; i++) {
         for (int j = 0; j < WIDTH; j++) {
@@ -222,7 +223,10 @@ void initialize(int currentLevel) {
     // Base difficulty configuration
     int baseGhosts = (selectedDifficulty == EASY) ? 3 : (selectedDifficulty == HARD ? 5 : 4);
     int baseSpeed  = (selectedDifficulty == EASY) ? 500 : (selectedDifficulty == HARD ? 240 : 350);
-    invincibilityDurationMs = (selectedDifficulty == EASY) ? 15000 : (selectedDifficulty == HARD ? 7000 : 10000);
+    int baseInvincible = (selectedDifficulty == EASY) ? 15000 : (selectedDifficulty == HARD ? 7000 : 10000);
+
+    // Scale invincibility duration down by 1s (1000ms) per level (minimum 4 seconds)
+    invincibilityDurationMs = std::max(4000, baseInvincible - (currentLevel - 1) * 1000);
 
     // Spawn Demons
     int demonCount = std::min(7, baseGhosts + (currentLevel - 1));
