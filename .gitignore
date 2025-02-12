@@ -1,0 +1,11 @@
+# Build executables
+*.exe
+*.o
+*.obj
+
+# IDE & OS files
+.vscode/
+.idea/
+*.suo
+*.user
+.DS_Store
