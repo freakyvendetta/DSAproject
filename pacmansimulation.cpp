@@ -223,10 +223,21 @@ void initialize(int currentLevel) {
     // Base difficulty configuration
     int baseGhosts = (selectedDifficulty == EASY) ? 3 : (selectedDifficulty == HARD ? 5 : 4);
     int baseSpeed  = (selectedDifficulty == EASY) ? 500 : (selectedDifficulty == HARD ? 240 : 350);
-    int baseInvincible = (selectedDifficulty == EASY) ? 15000 : (selectedDifficulty == HARD ? 7000 : 10000);
 
-    // Scale invincibility duration down by 1s (1000ms) per level (minimum 4 seconds)
-    invincibilityDurationMs = std::max(4000, baseInvincible - (currentLevel - 1) * 1000);
+    // Dynamic invincibility duration scaling per level
+    if (selectedDifficulty == EASY) {
+        if (currentLevel == 1) invincibilityDurationMs = 15000;
+        else if (currentLevel == 2) invincibilityDurationMs = 10000;
+        else invincibilityDurationMs = std::max(5000, 7000 - (currentLevel - 3) * 1000);
+    } else if (selectedDifficulty == MEDIUM) {
+        if (currentLevel == 1) invincibilityDurationMs = 10000;
+        else if (currentLevel == 2) invincibilityDurationMs = 8000;
+        else invincibilityDurationMs = std::max(4000, 6000 - (currentLevel - 3) * 1000);
+    } else {
+        if (currentLevel == 1) invincibilityDurationMs = 7000;
+        else if (currentLevel == 2) invincibilityDurationMs = 5000;
+        else invincibilityDurationMs = 4000;
+    }
 
     // Spawn Demons
     int demonCount = std::min(7, baseGhosts + (currentLevel - 1));
@@ -302,7 +313,7 @@ void draw() {
 
     // Line 3: Pause / Controls line dynamically centered
     if (paused) {
-        std::string pauseText = "*** GAME PAUSED *** (Press SPACE / P to Resume | Q = Quit)";
+        std::string pauseText = "*** GAME PAUSED *** (Press MOVE / SPACE / P to Resume | Q = Quit)";
         std::cout << getCenterPadding((int)pauseText.length()) << "\033[1;33m" << pauseText << "\033[0m                          \n";
     } else {
         std::string ctrlText = "Controls: ARROWS / WASD = Move | SPACE / P = Pause | Q = Quit";
@@ -518,24 +529,52 @@ int main() {
 
         if (_kbhit()) { 
             char ch = _getch();
+            int moveX = 0, moveY = 0;
+            bool isMoveKey = false;
+            bool isPauseKey = false;
+            bool isQuitKey = false;
+
             if (ch == -32 || ch == 224 || ch == 0) { // Arrow Keys Prefix
                 char arrow = _getch();
                 switch (arrow) {
-                    case 72: movePacman(0, -1); break; // UP
-                    case 80: movePacman(0, 1);  break; // DOWN
-                    case 75: movePacman(-1, 0); break; // LEFT
-                    case 77: movePacman(1, 0);  break; // RIGHT
+                    case 72: moveY = -1; isMoveKey = true; break; // UP
+                    case 80: moveY = 1;  isMoveKey = true; break; // DOWN
+                    case 75: moveX = -1; isMoveKey = true; break; // LEFT
+                    case 77: moveX = 1;  isMoveKey = true; break; // RIGHT
                 }
             } else {
                 switch (tolower(ch)) {
-                    case 'w': movePacman(0, -1); break;
-                    case 's': movePacman(0, 1); break;
-                    case 'a': movePacman(-1, 0); break;
-                    case 'd': movePacman(1, 0); break;
+                    case 'w': moveY = -1; isMoveKey = true; break;
+                    case 's': moveY = 1;  isMoveKey = true; break;
+                    case 'a': moveX = -1; isMoveKey = true; break;
+                    case 'd': moveX = 1;  isMoveKey = true; break;
                     case ' ':
-                    case 'p': pauseGame(); break;
-                    case 'q': return 0;
+                    case 'p': isPauseKey = true; break;
+                    case 'q': isQuitKey = true; break;
                 }
+            }
+
+            if (isQuitKey) {
+                return 0;
+            }
+
+            if (paused) {
+                if (isMoveKey) {
+                    paused = false; // Unpause on movement!
+                    movePacman(moveX, moveY);
+                } else if (isPauseKey) {
+                    paused = false; // Unpause on space/p!
+                    draw();
+                }
+                // Any other key while paused is ignored!
+            } else {
+                if (isMoveKey) {
+                    movePacman(moveX, moveY);
+                } else if (isPauseKey) {
+                    paused = true; // Pause game!
+                    draw();
+                }
+                // Any other unassigned key is ignored!
             }
         }
 
