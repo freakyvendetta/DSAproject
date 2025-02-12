@@ -95,30 +95,41 @@ void flushInputBuffer() {
 
 // Interactive Difficulty Selection Screen
 void selectDifficultyMenu() {
-    system("cls");
-    std::string pad = getCenterPadding(50);
-    std::cout << "\n\n";
-    std::cout << pad << "\033[1;36m==================================================\033[0m\n";
-    std::cout << pad << "\033[1;33m|    [C]     A R C A D E   P A C - M A N     [C] |\033[0m\n";
-    std::cout << pad << "\033[1;33m|    ---    D S A   C + +   E N G I N E    ---   |\033[0m\n";
-    std::cout << pad << "\033[1;36m==================================================\033[0m\n\n";
+    bool invalidChoice = false;
+    while (true) {
+        system("cls");
+        std::string pad = getCenterPadding(50);
+        std::cout << "\n\n";
+        std::cout << pad << "\033[1;36m==================================================\033[0m\n";
+        std::cout << pad << "\033[1;33m|    [C]     A R C A D E   P A C - M A N     [C] |\033[0m\n";
+        std::cout << pad << "\033[1;33m|    ---    D S A   C + +   E N G I N E    ---   |\033[0m\n";
+        std::cout << pad << "\033[1;36m==================================================\033[0m\n\n";
 
-    std::cout << pad << "  \033[1;37mSELECT DIFFICULTY LEVEL:\033[0m\n\n";
-    std::cout << pad << "  \033[1;32m[1] EASY   \033[0m - Slower Ghosts, 3 Ghosts, 15s Power-Up\n";
-    std::cout << pad << "  \033[1;33m[2] MEDIUM \033[0m - Normal Ghosts, 4 Ghosts, 10s Power-Up\n";
-    std::cout << pad << "  \033[1;31m[3] HARD   \033[0m - Fast Ghosts, 6 Ghosts, 7s Power-Up\n\n";
-    std::cout << pad << "  Enter Choice (1-3): ";
+        std::cout << pad << "  \033[1;37mSELECT DIFFICULTY LEVEL:\033[0m\n\n";
+        std::cout << pad << "  \033[1;32m[1] EASY   \033[0m - Slower Ghosts, 3 Ghosts, 15s Power-Up\n";
+        std::cout << pad << "  \033[1;33m[2] MEDIUM \033[0m - Normal Ghosts, 4 Ghosts, 10s Power-Up\n";
+        std::cout << pad << "  \033[1;31m[3] HARD   \033[0m - Fast Ghosts, 6 Ghosts, 7s Power-Up\n";
+        std::cout << pad << "  \033[1;35m[Q] QUIT   \033[0m - Exit Game\n\n";
 
-    flushInputBuffer();
-    char choice = 0;
-    while (choice != '1' && choice != '2' && choice != '3') {
-        choice = _getch();
+        if (invalidChoice) {
+            std::cout << pad << "  \033[1;31m[!] Invalid Choice! Press 1, 2, 3 or Q to Quit.\033[0m\n\n";
+        }
+
+        std::cout << pad << "  Enter Choice (1-3 or Q): ";
+
+        flushInputBuffer();
+        char choice = (char)tolower(_getch());
+        if (choice == '1') { selectedDifficulty = EASY; break; }
+        else if (choice == '2') { selectedDifficulty = MEDIUM; break; }
+        else if (choice == '3') { selectedDifficulty = HARD; break; }
+        else if (choice == 'q') {
+            system("cls");
+            std::cout << "\n\n" << getCenterPadding(25) << "Thanks for playing Pac-Man!\n\n";
+            exit(0);
+        } else {
+            invalidChoice = true;
+        }
     }
-
-    if (choice == '1') selectedDifficulty = EASY;
-    else if (choice == '2') selectedDifficulty = MEDIUM;
-    else if (choice == '3') selectedDifficulty = HARD;
-
     system("cls");
 }
 
@@ -270,21 +281,28 @@ void draw() {
         std::cout << line << "\n";
     }
 
-    std::string infoPad = getCenterPadding(66);
     std::string diffStr = (selectedDifficulty == EASY) ? "EASY" : (selectedDifficulty == HARD ? "HARD" : "MEDIUM");
 
-    std::cout << infoPad << "Score: " << score << " | High Score: " << std::max(score, highScore) 
-              << " | Food Left: " << food << "                              \n";
-    std::cout << infoPad << "Mode: " << diffStr << " | Level: " << level << " | Invincible: ";
+    // Line 1: Score metrics dynamically centered
+    std::string scoreStr = "Score: " + std::to_string(score) + " | High Score: " + std::to_string(std::max(score, highScore)) + " | Food Left: " + std::to_string(food);
+    std::cout << getCenterPadding((int)scoreStr.length()) << scoreStr << "                          \n";
+
+    // Line 2: Mode & Invincibility metrics dynamically centered
+    std::string modePlain = "Mode: " + diffStr + " | Level: " + std::to_string(level) + " | Invincible: " + (invincible ? "YES (" + std::to_string(invincibleTimeLeft) + "s)" : "NO");
+    std::cout << getCenterPadding((int)modePlain.length()) << "Mode: " << diffStr << " | Level: " << level << " | Invincible: ";
     if (invincible) {
-        std::cout << "\033[1;36mYES (" << invincibleTimeLeft << "s)\033[0m                                 \n";
+        std::cout << "\033[1;36mYES (" << invincibleTimeLeft << "s)\033[0m                          \n";
     } else {
-        std::cout << "NO                                         \n";
+        std::cout << "NO                                      \n";
     }
+
+    // Line 3: Pause / Controls line dynamically centered
     if (paused) {
-        std::cout << infoPad << "\033[1;33m*** GAME PAUSED *** (Press 'P' to Resume | Q = Quit)\033[0m                 \n";
+        std::string pauseText = "*** GAME PAUSED *** (Press SPACE / P to Resume | Q = Quit)";
+        std::cout << getCenterPadding((int)pauseText.length()) << "\033[1;33m" << pauseText << "\033[0m                          \n";
     } else {
-        std::cout << infoPad << "Controls: ARROWS / WASD = Move | P = Pause | Q = Quit                        \n";
+        std::string ctrlText = "Controls: ARROWS / WASD = Move | SPACE / P = Pause | Q = Quit";
+        std::cout << getCenterPadding((int)ctrlText.length()) << ctrlText << "                          \n";
     }
 }
 
@@ -510,6 +528,7 @@ int main() {
                     case 's': movePacman(0, 1); break;
                     case 'a': movePacman(-1, 0); break;
                     case 'd': movePacman(1, 0); break;
+                    case ' ':
                     case 'p': pauseGame(); break;
                     case 'q': return 0;
                 }
