@@ -1,29 +1,47 @@
-# 🕹️ C++ Terminal Pac-Man Arcade Simulation (DSA Project)
+# 🕹️ C++ Terminal Pac-Man Arcade Simulation (`pacman-dsa-cpp`)
 
 [![Language: C++](https://img.shields.io/badge/Language-C%2B%2B11%2B-blue.svg)](https://isocpp.org/)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)](#)
 [![Subject: Data Structures & Algorithms](https://img.shields.io/badge/Subject-Data%20Structures%20%26%20Algorithms-orange.svg)](#)
 
-An interactive, real-time terminal-based **Pac-Man Arcade Simulation** developed in **C++** as a **Data Structures & Algorithms (DSA)** academic project. It features dynamic grid representation, algorithm-driven enemy AI pursuit logic (Manhattan distance heuristic), state management (invincibility timers & power-ups), non-blocking input handling, and colorful ANSI terminal rendering.
+An interactive, real-time terminal-based **Pac-Man Arcade Simulation** developed in **C++** as a **Data Structures & Algorithms (DSA)** academic project. It features dynamic grid representation, Breadth-First Search (BFS) enemy AI pathfinding, real-time wall-clock timer synchronization, dual WASD & Arrow Key controls, an interactive difficulty menu, and dynamic console auto-centering.
 
 ---
 
 ## 🚀 Key Features
 
-* **2D Grid Spatial Data Structure**: 40×20 matrix representation of the game board handling collision detection for walls, pellets, power-ups, and entities.
-* **Manhattan Distance Enemy AI Pursuit**: Demons dynamically calculate Manhattan distance ($\Delta x + \Delta y$) relative to Pac-Man's coordinates, switching between greedy aggressive tracking when within range and random exploration.
-* **Non-Blocking Keyboard I/O**: Real-time continuous game loop using Win32 API (`conio.h` `_kbhit()`, `_getch()`, and `windows.h` `Beep()` sound effects).
-* **State Management & Timers**: Dynamic invincibility power-up states (`P`), temporary ghost vulnerability/safe frames, active score tracking, and progressive level difficulty multipliers.
-* **ANSI Color Rendering**: Multi-color terminal UI with ANSI escape sequences (Yellow Pac-Man, Red Demons, Green Food Pellets, Cyan Power-Ups).
+* **2D Grid Spatial Data Structure**: 40×20 matrix representation of the game board handling $O(1)$ collision detection for walls, pellets, power-ups, and entities.
+* **Breadth-First Search (BFS) AI Pathfinding**: Ghosts run a queue-based BFS graph traversal algorithm (`getNextBfsStep`) to compute the exact shortest path through maze walls towards Pac-Man.
+* **Interactive Difficulty Selection Menu**: Choose between `Easy`, `Medium`, and `Hard` modes at startup, dynamically configuring ghost velocities, initial ghost counts, and invincibility power-up durations.
+* **Dynamic Terminal Auto-Centering**: Real-time Win32 console buffer measurement (`GetConsoleScreenBufferInfo`) automatically centers the retro arcade header, game board, score HUD, and Game Over screen in any terminal window size.
+* **Real-Time Wall-Clock Timers**: Millisecond-accurate invincibility timers (`GetTickCount()`) scaling duration progressively per level transition.
+* **Non-Blocking Keyboard I/O**: Real-time continuous game loop using Win32 API (`conio.h` `_kbhit()`, `_getch()`, and `windows.h` `Beep()` audio cues).
+* **Flicker-Free 60 FPS Rendering**: In-place console cursor repositioning (`SetConsoleCursorPosition`) replacing `system("cls")` for smooth visual rendering.
+* **Input Buffer Safety**: Automatic keyboard buffer flushing (`FlushConsoleInputBuffer`) preventing stuck keypresses from spilling into menus.
 
 ---
 
 ## 🛠️ Data Structures & Algorithms Concepts Applied
 
-1. **2D Matrix / Grid Graph Topology**: Used for environment bounds, path collision checks, and entity spatial mapping.
-2. **Greedy Heuristic AI Pursuit**: Calculates shortest grid distance ($|x_1 - x_2| + |y_1 - y_2|$) for real-time demon pathing towards player coordinates.
-3. **State Machines & Game Loop Synchronization**: Discrete finite state logic (`NORMAL`, `INVINCIBLE`, `PAUSED`, `GAME OVER`) with frame timing synchronization via `Sleep()`.
-4. **Pseudo-Random Map Generation**: Algorithmic obstacle distribution and dynamic food pellet positioning ensuring randomized board setups per level.
+1. **Breadth-First Search (BFS Graph Traversal)**: Queue-based (`std::queue`) shortest path search algorithm operating on the 2D grid graph to track Pac-Man.
+2. **2D Matrix / Grid Topology**: Used for environment bounds, path collision checks, and entity spatial mapping.
+3. **Random Shuffling Algorithms**: `std::random_shuffle` over empty cell vectors to scatter 140 food pellets evenly across the full map.
+4. **State Machine & Game Loop Synchronization**: Finite state machine handling game states (`MENU`, `PLAYING`, `PAUSED`, `LEVEL_CLEARED`, `GAME_OVER`).
+5. **Tile Preservation Pattern**: Ghosts preserve underlying grid tiles (`underTile`) when moving, restoring pellets/power-ups when leaving.
+
+---
+
+## 🎮 Game Controls
+
+| Control | Key Input | Action |
+|---|---|---|
+| **Move Up** | `W` or `Up Arrow` | Move Pac-Man Up |
+| **Move Down** | `S` or `Down Arrow` | Move Pac-Man Down |
+| **Move Left** | `A` or `Left Arrow` | Move Pac-Man Left |
+| **Move Right** | `D` or `Right Arrow` | Move Pac-Man Right |
+| **Pause / Resume** | `SPACE` or `P` | Pause game (or press any **Move Key** to Resume & Move!) |
+| **Quit** | `Q` | Exit Game |
+| **Difficulty Select** | `1`, `2`, `3`, or `Q` | Select `[1] Easy`, `[2] Medium`, `[3] Hard`, or `[Q] Quit` on startup menu |
 
 ---
 
@@ -37,28 +55,18 @@ An interactive, real-time terminal-based **Pac-Man Arcade Simulation** developed
 
 ```powershell
 # 1. Clone repository
-git clone https://github.com/freakyvendetta/DSAproject.git
-cd DSAproject
+git clone https://github.com/freakyvendetta/pacman-dsa-cpp.git
+cd pacman-dsa-cpp
 
-# 2. Compile using MinGW g++
-g++ -o pacman.exe pacmansimulation.cpp
+# 2. Option A: Compile using MinGW g++
+g++ -O2 -std=c++11 -o pacman.exe pacmansimulation.cpp
+
+# 2. Option B: Automated build script
+.\build.bat
 
 # 3. Launch game
 .\pacman.exe
 ```
-
----
-
-## 🎮 Game Controls
-
-| Key | Action |
-|---|---|
-| `W` | Move Up |
-| `S` | Move Down |
-| `A` | Move Left |
-| `D` | Move Right |
-| `P` | Pause / Resume Game |
-| `Q` | Quit Game |
 
 ---
 
