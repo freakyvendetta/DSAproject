@@ -184,11 +184,11 @@ void initialize(int currentLevel) {
 
 void drawBanner() {
     std::cout << "\033[1;33m";
-    std::cout << "  ___   A R C A D E   P A C - M A N   ___\n";
-    std::cout << " / _ \\                               / _ \\\n";
-    std::cout << "| | | |  ==========================  | | | |\n";
-    std::cout << " \\___/   D S A   C + +   E N G I N E  \\___/\033[0m\n";
-    std::cout << "\033[1;36m========================================\033[0m\n";
+    std::cout << "  ___     A R C A D E   P A C - M A N     ___  \n";
+    std::cout << " / _ \\                                   / _ \\ \n";
+    std::cout << "| | | |  ==============================  | | | |\n";
+    std::cout << " \\___/    D S A   C + +   E N G I N E    \\___/ \033[0m\n";
+    std::cout << "\033[1;36m================================================\033[0m\n";
 }
 
 void draw() {
