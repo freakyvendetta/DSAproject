@@ -6,6 +6,7 @@
 #include <vector>
 #include <queue>
 #include <algorithm>
+#include <string>
 
 #define WIDTH 40
 #define HEIGHT 20
@@ -15,8 +16,9 @@
 #define EMPTY ' '
 #define DEMON 'X'
 #define POWERUP 'P'
-#define INVINCIBILITY_DURATION_MS 10000  // 10 real seconds
 #define TARGET_FOOD_COUNT 140            // Rich food density across maze
+
+enum Difficulty { EASY = 1, MEDIUM = 2, HARD = 3 };
 
 struct Demon {
     int y, x;
@@ -36,9 +38,11 @@ int food = 0;
 bool invincible = false;
 DWORD invincibleEndTime = 0;
 int invincibleTimeLeft = 0;
+int invincibilityDurationMs = 10000;
 bool paused = false;
 int level = 1; 
 int demonSpeed = 350;
+Difficulty selectedDifficulty = MEDIUM;
 std::vector<Demon> demons;
 
 // Function Prototypes
@@ -53,6 +57,8 @@ void pauseGame();
 void hideCursor();
 void setCursorPosition(int x, int y);
 void flushInputBuffer();
+void selectDifficultyMenu();
+std::string getCenterPadding(int textLength);
 
 // Hide terminal cursor for flicker-free rendering
 void hideCursor() {
@@ -70,12 +76,46 @@ void setCursorPosition(int x, int y) {
     SetConsoleCursorPosition(hOut, coord);
 }
 
+// Dynamically calculate left padding spaces to center text in any console window size
+std::string getCenterPadding(int textLength) {
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    int windowWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+    if (windowWidth <= textLength) return "";
+    return std::string((windowWidth - textLength) / 2, ' ');
+}
+
 // Flush keyboard buffer to clear stuck keypresses
 void flushInputBuffer() {
     while (_kbhit()) {
         _getch();
     }
     FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+}
+
+// Interactive Difficulty Selection Screen
+void selectDifficultyMenu() {
+    system("cls");
+    std::string pad = getCenterPadding(50);
+    std::cout << "\n\n";
+    std::cout << pad << "\033[1;36m==================================================\033[0m\n";
+    std::cout << pad << "\033[1;33m|    [C]     A R C A D E   P A C - M A N     [C] |\033[0m\n";
+    std::cout << pad << "\033[1;33m|    ---    D S A   C + +   E N G I N E    ---   |\033[0m\n";
+    std::cout << pad << "\033[1;36m==================================================\033[0m\n\n";
+
+    std::cout << pad << "  \033[1;37mSELECT DIFFICULTY LEVEL:\033[0m\n\n";
+    std::cout << pad << "  \033[1;32m[1] EASY   \033[0m - Slower Ghosts, 3 Ghosts, 15s Power-Up\n";
+    std::cout << pad << "  \033[1;33m[2] MEDIUM \033[0m - Normal Ghosts, 4 Ghosts, 10s Power-Up\n";
+    std::cout << pad << "  \033[1;31m[3] HARD   \033[0m - Fast Ghosts, 6 Ghosts, 7s Power-Up\n\n";
+    std::cout << pad << "  Enter Choice (1-3): ";
+
+    flushInputBuffer();
+    char choice = _getch();
+    if (choice == '1') selectedDifficulty = EASY;
+    else if (choice == '3') selectedDifficulty = HARD;
+    else selectedDifficulty = MEDIUM;
+
+    system("cls");
 }
 
 // Breadth-First Search (BFS) Pathfinding for Demon AI
@@ -164,8 +204,13 @@ void initialize(int currentLevel) {
     pacman_y = HEIGHT / 2;
     board[pacman_y][pacman_x] = PACMAN;
 
-    // Spawn Demons (Level 1 = 4 demons, scaling to max 6)
-    int demonCount = std::min(6, 4 + (currentLevel - 1));
+    // Base difficulty configuration
+    int baseGhosts = (selectedDifficulty == EASY) ? 3 : (selectedDifficulty == HARD ? 5 : 4);
+    int baseSpeed  = (selectedDifficulty == EASY) ? 500 : (selectedDifficulty == HARD ? 240 : 350);
+    invincibilityDurationMs = (selectedDifficulty == EASY) ? 15000 : (selectedDifficulty == HARD ? 7000 : 10000);
+
+    // Spawn Demons
+    int demonCount = std::min(7, baseGhosts + (currentLevel - 1));
     while (demonCount > 0) {
         int i = rand() % (HEIGHT - 2) + 1;
         int j = rand() % (WIDTH - 2) + 1;
@@ -179,16 +224,15 @@ void initialize(int currentLevel) {
     placePowerUps();
     placeFood();
 
-    demonSpeed = std::max(150, 420 - (currentLevel - 1) * 40);
+    demonSpeed = std::max(120, baseSpeed - (currentLevel - 1) * 35);
 }
 
 void drawBanner() {
-    std::cout << "\033[1;33m";
-    std::cout << "  ___     A R C A D E   P A C - M A N     ___  \n";
-    std::cout << " / _ \\                                   / _ \\ \n";
-    std::cout << "| | | |  ==============================  | | | |\n";
-    std::cout << " \\___/    D S A   C + +   E N G I N E    \\___/ \033[0m\n";
-    std::cout << "\033[1;36m================================================\033[0m\n";
+    std::string pad = getCenterPadding(50);
+    std::cout << pad << "\033[1;36m==================================================\033[0m\n";
+    std::cout << pad << "\033[1;33m|    [C]     A R C A D E   P A C - M A N     [C] |\033[0m\n";
+    std::cout << pad << "\033[1;33m|    ---    D S A   C + +   E N G I N E    ---   |\033[0m\n";
+    std::cout << pad << "\033[1;36m==================================================\033[0m\n";
 }
 
 void draw() {
@@ -196,43 +240,47 @@ void draw() {
 
     drawBanner();
 
-    std::string buffer = "";
+    std::string pad = getCenterPadding(WIDTH);
+
     for (int i = 0; i < HEIGHT; i++) {
+        std::string line = pad;
         for (int j = 0; j < WIDTH; j++) {
             if (board[i][j] == PACMAN) {
-                buffer += "\033[1;33mC\033[0m"; // Yellow Pacman
+                line += "\033[1;33mC\033[0m"; // Yellow Pacman
             } else if (board[i][j] == DEMON) {
                 if (invincible) {
-                    buffer += "\033[1;34mX\033[0m"; // Blue Demon (Vulnerable)
+                    line += "\033[1;34mX\033[0m"; // Blue Demon (Vulnerable)
                 } else {
-                    buffer += "\033[1;31mX\033[0m"; // Red Demon (Dangerous)
+                    line += "\033[1;31mX\033[0m"; // Red Demon (Dangerous)
                 }
             } else if (board[i][j] == FOOD) {
-                buffer += "\033[1;32m.\033[0m"; // Green Food
+                line += "\033[1;32m.\033[0m"; // Green Food
             } else if (board[i][j] == POWERUP) {
-                buffer += "\033[1;36mP\033[0m"; // Cyan Power-up
+                line += "\033[1;36mP\033[0m"; // Cyan Power-up
             } else if (board[i][j] == WALL) {
-                buffer += "\033[1;37m#\033[0m"; // White Wall
+                line += "\033[1;37m#\033[0m"; // White Wall
             } else {
-                buffer += " ";
+                line += " ";
             }
         }
-        buffer += "\n";
+        std::cout << line << "\n";
     }
 
-    std::cout << buffer;
-    std::cout << "Score: " << score << " | High Score: " << std::max(score, highScore) 
-              << " | Food Left: " << food << "    \n";
-    std::cout << "Level: " << level << " | Invincible: ";
+    std::string infoPad = getCenterPadding(52);
+    std::string diffStr = (selectedDifficulty == EASY) ? "EASY" : (selectedDifficulty == HARD ? "HARD" : "MEDIUM");
+
+    std::cout << infoPad << "Score: " << score << " | High Score: " << std::max(score, highScore) 
+              << " | Food Left: " << food << "        \n";
+    std::cout << infoPad << "Mode: " << diffStr << " | Level: " << level << " | Invincible: ";
     if (invincible) {
-        std::cout << "\033[1;36mYES (" << invincibleTimeLeft << "s)\033[0m   \n";
+        std::cout << "\033[1;36mYES (" << invincibleTimeLeft << "s)\033[0m       \n";
     } else {
-        std::cout << "NO         \n";
+        std::cout << "NO           \n";
     }
     if (paused) {
-        std::cout << "\033[1;33m*** GAME PAUSED *** (Press 'P' to Resume)\033[0m\n";
+        std::cout << infoPad << "\033[1;33m*** GAME PAUSED *** (Press 'P' to Resume)\033[0m          \n";
     } else {
-        std::cout << "Controls: ARROWS / WASD = Move | P = Pause | Q = Quit          \n";
+        std::cout << infoPad << "Controls: ARROWS / WASD = Move | P = Pause | Q = Quit             \n";
     }
 }
 
@@ -262,7 +310,7 @@ void movePacman(int move_x, int move_y) {
         }
     } else if (board[y][x] == POWERUP) {
         invincible = true;
-        invincibleEndTime = GetTickCount() + INVINCIBILITY_DURATION_MS;
+        invincibleEndTime = GetTickCount() + invincibilityDurationMs;
         score += 20;
         Beep(1000, 100); 
     }
@@ -361,19 +409,23 @@ void placeFood() {
 void showGameOver(bool win) {
     flushInputBuffer();
     system("cls");
+    std::string pad = getCenterPadding(44);
+
     if (win) {
-        std::cout << "\n\n  \033[1;32m========================================\033[0m\n";
-        std::cout << "  \033[1;32m   LEVEL " << level << " CLEARED! BONUS +200 PTS   \033[0m\n";
-        std::cout << "  \033[1;32m========================================\033[0m\n\n";
+        std::cout << "\n\n";
+        std::cout << pad << "\033[1;32m============================================\033[0m\n";
+        std::cout << pad << "\033[1;32m   LEVEL " << level << " CLEARED! BONUS +200 PTS   \033[0m\n";
+        std::cout << pad << "\033[1;32m============================================\033[0m\n\n";
         Beep(800, 150); Beep(1000, 150); Beep(1200, 200);
         Sleep(1200);
     } else {
         if (score > highScore) highScore = score;
-        std::cout << "\n\n  \033[1;31m========================================\033[0m\n";
-        std::cout << "  \033[1;31m               GAME OVER!               \033[0m\n";
-        std::cout << "  \033[1;31m========================================\033[0m\n";
-        std::cout << "   Final Score: " << score << "\n";
-        std::cout << "   High Score:  " << highScore << "\n\n";
+        std::cout << "\n\n";
+        std::cout << pad << "\033[1;31m============================================\033[0m\n";
+        std::cout << pad << "\033[1;31m               GAME OVER!                   \033[0m\n";
+        std::cout << pad << "\033[1;31m============================================\033[0m\n";
+        std::cout << pad << "   Final Score: " << score << "\n";
+        std::cout << pad << "   High Score:  " << highScore << "\n\n";
         Beep(400, 200); Beep(300, 400);
         Sleep(1500);
     }
@@ -388,7 +440,9 @@ void pauseGame() {
 int main() {
     std::srand((unsigned int)std::time(0));
     hideCursor();
-    system("cls");
+
+    selectDifficultyMenu();
+
     initialize(level);
     draw();
 
@@ -410,13 +464,14 @@ int main() {
         if (res == 1) { // Player Died
             showGameOver(false);
             flushInputBuffer();
-            std::cout << "Play Again? (Y/N): ";
+            std::string pad = getCenterPadding(30);
+            std::cout << pad << "Play Again? (Y/N): ";
             char choice;
             std::cin >> choice;
             if (choice == 'y' || choice == 'Y') {
                 score = 0;
                 level = 1;
-                system("cls");
+                selectDifficultyMenu();
                 initialize(level);
                 draw();
                 continue;
