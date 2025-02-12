@@ -15,12 +15,16 @@
 #define EMPTY ' '
 #define DEMON 'X'
 #define POWERUP 'P'
-#define INVINCIBILITY_DURATION 15
-#define MIN_FOOD 45 
+#define INVINCIBILITY_DURATION_MS 10000  // 10 real seconds
+#define MIN_FOOD 50 
 
 struct Demon {
     int y, x;
     char underTile;
+};
+
+struct Point {
+    int y, x;
 };
 
 int res = 0;            // 0: running, 1: game over, 2: level cleared
@@ -30,7 +34,8 @@ int pacman_x, pacman_y;
 char board[HEIGHT][WIDTH];
 int food = 0;
 bool invincible = false;
-int invincibleTime = 0; 
+DWORD invincibleEndTime = 0;
+int invincibleTimeLeft = 0;
 bool paused = false;
 int level = 1; 
 int demonSpeed = 350;
@@ -47,6 +52,7 @@ void showGameOver(bool win);
 void pauseGame();
 void hideCursor();
 void setCursorPosition(int x, int y);
+void flushInputBuffer();
 
 // Hide terminal cursor for flicker-free rendering
 void hideCursor() {
@@ -64,11 +70,15 @@ void setCursorPosition(int x, int y) {
     SetConsoleCursorPosition(hOut, coord);
 }
 
-// Breadth-First Search (BFS) Pathfinding for Demon AI
-struct Point {
-    int y, x;
-};
+// Flush keyboard buffer to clear stuck keypresses
+void flushInputBuffer() {
+    while (_kbhit()) {
+        _getch();
+    }
+    FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+}
 
+// Breadth-First Search (BFS) Pathfinding for Demon AI
 Point getNextBfsStep(int startY, int startX, int targetY, int targetX) {
     if (startY == targetY && startX == targetX) return {startY, startX};
 
@@ -125,6 +135,8 @@ Point getNextBfsStep(int startY, int startX, int targetY, int targetX) {
 void initialize(int currentLevel) {
     demons.clear();
     res = 0;
+    invincible = false;
+    invincibleEndTime = 0;
 
     for (int i = 0; i < HEIGHT; i++) {
         for (int j = 0; j < WIDTH; j++) {
@@ -200,8 +212,12 @@ void draw() {
     std::cout << buffer;
     std::cout << "Score: " << score << " | High Score: " << std::max(score, highScore) 
               << " | Food Left: " << food << "\n";
-    std::cout << "Level: " << level << " | Invincible: " 
-              << (invincible ? "\033[1;36mYES (" + std::to_string(invincibleTime) + "s)\033[0m   " : "NO        ") << "\n";
+    std::cout << "Level: " << level << " | Invincible: ";
+    if (invincible) {
+        std::cout << "\033[1;36mYES (" << invincibleTimeLeft << "s)\033[0m   \n";
+    } else {
+        std::cout << "NO         \n";
+    }
     if (paused) {
         std::cout << "\033[1;33m*** GAME PAUSED *** (Press 'P' to Resume)\033[0m\n";
     } else {
@@ -220,8 +236,8 @@ void movePacman(int move_x, int move_y) {
     if (board[y][x] == FOOD) {
         score += 10;
         food--;
-        Beep(600, 40); 
-        if (food == 0) {
+        Beep(600, 30); 
+        if (food <= 0) {
             res = 2; // Level cleared!
             return;
         }
@@ -231,13 +247,13 @@ void movePacman(int move_x, int move_y) {
             return;
         } else {
             score += 50;
-            Beep(1200, 100);
+            Beep(1200, 80);
         }
     } else if (board[y][x] == POWERUP) {
         invincible = true;
-        invincibleTime = INVINCIBILITY_DURATION;
+        invincibleEndTime = GetTickCount() + INVINCIBILITY_DURATION_MS;
         score += 20;
-        Beep(1000, 150); 
+        Beep(1000, 120); 
     }
 
     board[pacman_y][pacman_x] = EMPTY;
@@ -307,30 +323,39 @@ void placePowerUps() {
     }
 }
 
+// Evenly scatter food pellets across the ENTIRE board
 void placeFood() {
     food = 0;
-    while (food < MIN_FOOD) {
-        for (int i = 1; i < HEIGHT - 1; i++) {
-            for (int j = 1; j < WIDTH - 1; j++) {
-                if (board[i][j] == EMPTY && rand() % 4 == 0) {
-                    board[i][j] = FOOD;
-                    food++;
-                    if (food >= MIN_FOOD) break;
-                }
+    std::vector<Point> emptyCells;
+    for (int i = 1; i < HEIGHT - 1; i++) {
+        for (int j = 1; j < WIDTH - 1; j++) {
+            if (board[i][j] == EMPTY) {
+                emptyCells.push_back({i, j});
             }
-            if (food >= MIN_FOOD) break;
         }
+    }
+
+    // Shuffle empty cells to scatter food randomly across the full maze
+    std::random_shuffle(emptyCells.begin(), emptyCells.end());
+
+    int targetFood = std::min((int)emptyCells.size(), MIN_FOOD);
+    for (int k = 0; k < targetFood; k++) {
+        int r = emptyCells[k].y;
+        int c = emptyCells[k].x;
+        board[r][c] = FOOD;
+        food++;
     }
 }
 
 void showGameOver(bool win) {
+    flushInputBuffer();
     system("cls");
     if (win) {
         std::cout << "\n\n  \033[1;32m====================================\033[0m\n";
         std::cout << "  \033[1;32m  LEVEL " << level << " CLEARED! BONUS +200 PTS  \033[0m\n";
         std::cout << "  \033[1;32m====================================\033[0m\n\n";
-        Beep(800, 200); Beep(1000, 200); Beep(1200, 300);
-        Sleep(1500);
+        Beep(800, 150); Beep(1000, 150); Beep(1200, 200);
+        Sleep(1200);
     } else {
         if (score > highScore) highScore = score;
         std::cout << "\n\n  \033[1;31m====================================\033[0m\n";
@@ -338,9 +363,10 @@ void showGameOver(bool win) {
         std::cout << "  \033[1;31m====================================\033[0m\n";
         std::cout << "   Final Score: " << score << "\n";
         std::cout << "   High Score:  " << highScore << "\n\n";
-        Beep(400, 300); Beep(300, 500);
-        Sleep(2000);
+        Beep(400, 200); Beep(300, 400);
+        Sleep(1500);
     }
+    flushInputBuffer();
 }
 
 void pauseGame() {
@@ -358,8 +384,21 @@ int main() {
     DWORD lastGhostMove = GetTickCount();
 
     while (true) {
+        DWORD now = GetTickCount();
+
+        // Real-time invincibility countdown (ms based)
+        if (invincible) {
+            if (now >= invincibleEndTime) {
+                invincible = false;
+                invincibleTimeLeft = 0;
+            } else {
+                invincibleTimeLeft = (int)((invincibleEndTime - now) / 1000) + 1;
+            }
+        }
+
         if (res == 1) { // Player Died
             showGameOver(false);
+            flushInputBuffer();
             std::cout << "Play Again? (Y/N): ";
             char choice;
             std::cin >> choice;
@@ -385,13 +424,6 @@ int main() {
             continue;
         }
 
-        if (invincible) {
-            invincibleTime--;
-            if (invincibleTime <= 0) {
-                invincible = false;
-            }
-        }
-
         if (_kbhit()) { 
             char ch = _getch();
             switch (tolower(ch)) {
@@ -405,7 +437,6 @@ int main() {
         }
 
         if (!paused) {
-            DWORD now = GetTickCount();
             if (now - lastGhostMove >= (DWORD)demonSpeed) {
                 moveDemons();
                 draw();
@@ -413,7 +444,7 @@ int main() {
             }
         }
 
-        Sleep(30);
+        Sleep(25);
     }
     return 0;
 }
