@@ -3,6 +3,9 @@
 #include <ctime>
 #include <conio.h>
 #include <windows.h>
+#include <vector>
+#include <queue>
+#include <algorithm>
 
 #define WIDTH 40
 #define HEIGHT 20
@@ -12,33 +15,116 @@
 #define EMPTY ' '
 #define DEMON 'X'
 #define POWERUP 'P'
-#define INVINCIBILITY_DURATION 10
-#define MIN_FOOD 50 
-#define DEMON_SPEED_INCREASE 40
+#define INVINCIBILITY_DURATION 15
+#define MIN_FOOD 45 
 
-int res = 0;
+struct Demon {
+    int y, x;
+    char underTile;
+};
+
+int res = 0;            // 0: running, 1: game over, 2: level cleared
 int score = 0;
+int highScore = 0;
 int pacman_x, pacman_y;
 char board[HEIGHT][WIDTH];
 int food = 0;
-int curr = 0;
 bool invincible = false;
 int invincibleTime = 0; 
 bool paused = false;
 int level = 1; 
-int demonSpeed = 500;
+int demonSpeed = 350;
+std::vector<Demon> demons;
 
-
-void initialize(int level = 1);
+// Function Prototypes
+void initialize(int currentLevel);
 void draw();
-void move(int move_x, int move_y);
+void movePacman(int move_x, int move_y);
 void moveDemons();
 void placePowerUps();
 void placeFood();
 void showGameOver(bool win);
 void pauseGame();
+void hideCursor();
+void setCursorPosition(int x, int y);
 
-void initialize(int level) {
+// Hide terminal cursor for flicker-free rendering
+void hideCursor() {
+    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO info;
+    info.dwSize = 100;
+    info.bVisible = FALSE;
+    SetConsoleCursorInfo(consoleHandle, &info);
+}
+
+// Reposition cursor to top-left instead of using system("cls")
+void setCursorPosition(int x, int y) {
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    COORD coord = { (SHORT)x, (SHORT)y };
+    SetConsoleCursorPosition(hOut, coord);
+}
+
+// Breadth-First Search (BFS) Pathfinding for Demon AI
+struct Point {
+    int y, x;
+};
+
+Point getNextBfsStep(int startY, int startX, int targetY, int targetX) {
+    if (startY == targetY && startX == targetX) return {startY, startX};
+
+    bool visited[HEIGHT][WIDTH] = {false};
+    Point parent[HEIGHT][WIDTH];
+    for (int i = 0; i < HEIGHT; i++) {
+        for (int j = 0; j < WIDTH; j++) {
+            parent[i][j] = {-1, -1};
+        }
+    }
+
+    std::queue<Point> q;
+    q.push({startY, startX});
+    visited[startY][startX] = true;
+
+    int dy[] = {-1, 1, 0, 0};
+    int dx[] = {0, 0, -1, 1};
+
+    bool found = false;
+    while (!q.empty()) {
+        Point curr = q.front();
+        q.pop();
+
+        if (curr.y == targetY && curr.x == targetX) {
+            found = true;
+            break;
+        }
+
+        for (int i = 0; i < 4; i++) {
+            int ny = curr.y + dy[i];
+            int nx = curr.x + dx[i];
+
+            if (ny >= 0 && ny < HEIGHT && nx >= 0 && nx < WIDTH) {
+                if (!visited[ny][nx] && board[ny][nx] != WALL) {
+                    visited[ny][nx] = true;
+                    parent[ny][nx] = curr;
+                    q.push({ny, nx});
+                }
+            }
+        }
+    }
+
+    if (!found) return {startY, startX};
+
+    // Reconstruct path to find immediate next step
+    Point curr = {targetY, targetX};
+    while (!(parent[curr.y][curr.x].y == startY && parent[curr.y][curr.x].x == startX)) {
+        curr = parent[curr.y][curr.x];
+        if (curr.y == -1 || curr.x == -1) break;
+    }
+    return curr;
+}
+
+void initialize(int currentLevel) {
+    demons.clear();
+    res = 0;
 
     for (int i = 0; i < HEIGHT; i++) {
         for (int j = 0; j < WIDTH; j++) {
@@ -50,7 +136,8 @@ void initialize(int level) {
         }
     }
 
-    int wallCount = 50 + (level - 1) * 10;
+    // Procedural inner wall obstacles
+    int wallCount = 40 + (currentLevel - 1) * 8;
     while (wallCount > 0) {
         int i = rand() % (HEIGHT - 2) + 1; 
         int j = rand() % (WIDTH - 2) + 1;
@@ -60,52 +147,69 @@ void initialize(int level) {
         }
     }
 
-    int demonCount = 5 + (level - 1) * 2;
+    // Pacman spawn point at center
+    pacman_x = WIDTH / 2;
+    pacman_y = HEIGHT / 2;
+    board[pacman_y][pacman_x] = PACMAN;
+
+    // Spawn Demons
+    int demonCount = 4 + (currentLevel - 1) * 2;
     while (demonCount > 0) {
         int i = rand() % (HEIGHT - 2) + 1;
         int j = rand() % (WIDTH - 2) + 1;
-        if (board[i][j] == EMPTY) {
+        if (board[i][j] == EMPTY && (abs(i - pacman_y) + abs(j - pacman_x) > 6)) {
+            demons.push_back({i, j, EMPTY});
             board[i][j] = DEMON;
             demonCount--;
         }
     }
 
     placePowerUps();
-
     placeFood();
 
-    pacman_x = WIDTH / 2;
-    pacman_y = HEIGHT / 2;
-    board[pacman_y][pacman_x] = PACMAN;
+    demonSpeed = std::max(150, 450 - (currentLevel - 1) * 50);
 }
 
-
 void draw() {
-    system("cls");
+    setCursorPosition(0, 0);
+
+    std::string buffer = "";
     for (int i = 0; i < HEIGHT; i++) {
         for (int j = 0; j < WIDTH; j++) {
             if (board[i][j] == PACMAN) {
-                std::cout << "\033[1;33m" << PACMAN << "\033[0m"; // Yellow
+                buffer += "\033[1;33mC\033[0m"; // Yellow Pacman
             } else if (board[i][j] == DEMON) {
-                std::cout << "\033[1;31m" << DEMON << "\033[0m"; // Red
+                if (invincible) {
+                    buffer += "\033[1;34mX\033[0m"; // Blue Demon (Vulnerable)
+                } else {
+                    buffer += "\033[1;31mX\033[0m"; // Red Demon (Dangerous)
+                }
             } else if (board[i][j] == FOOD) {
-                std::cout << "\033[1;32m" << FOOD << "\033[0m"; // Green
+                buffer += "\033[1;32m.\033[0m"; // Green Food
             } else if (board[i][j] == POWERUP) {
-                std::cout << "\033[1;36m" << POWERUP << "\033[0m"; // Cyan
+                buffer += "\033[1;36mP\033[0m"; // Cyan Power-up
+            } else if (board[i][j] == WALL) {
+                buffer += "\033[1;37m#\033[0m"; // White Wall
             } else {
-                std::cout << board[i][j];
+                buffer += " ";
             }
         }
-        std::cout << "\n";
+        buffer += "\n";
     }
-    std::cout << "Score: " << score << " | Food Left: " << food << " | Invincible: " << (invincible ? "Yes" : "No") << "\n";
-    std::cout << "Level: " << level << " | Demon Speed: " << (1000 - demonSpeed) << "\n";
+
+    std::cout << buffer;
+    std::cout << "Score: " << score << " | High Score: " << std::max(score, highScore) 
+              << " | Food Left: " << food << "\n";
+    std::cout << "Level: " << level << " | Invincible: " 
+              << (invincible ? "\033[1;36mYES (" + std::to_string(invincibleTime) + "s)\033[0m   " : "NO        ") << "\n";
     if (paused) {
-        std::cout << "Game Paused. Press 'p' to resume.\n";
+        std::cout << "\033[1;33m*** GAME PAUSED *** (Press 'P' to Resume)\033[0m\n";
+    } else {
+        std::cout << "Controls: W/A/S/D = Move | P = Pause | Q = Quit          \n";
     }
 }
 
-void move(int move_x, int move_y) {
+void movePacman(int move_x, int move_y) {
     int x = pacman_x + move_x;
     int y = pacman_y + move_y;
 
@@ -116,21 +220,24 @@ void move(int move_x, int move_y) {
     if (board[y][x] == FOOD) {
         score += 10;
         food--;
-        curr++;
-        Beep(500, 200); 
+        Beep(600, 40); 
         if (food == 0) {
-            res = 2; 
+            res = 2; // Level cleared!
             return;
         }
     } else if (board[y][x] == DEMON) {
         if (!invincible) {
-            res = 1;
+            res = 1; // Game Over
             return;
+        } else {
+            score += 50;
+            Beep(1200, 100);
         }
     } else if (board[y][x] == POWERUP) {
         invincible = true;
         invincibleTime = INVINCIBILITY_DURATION;
-        Beep(1000, 500); 
+        score += 20;
+        Beep(1000, 150); 
     }
 
     board[pacman_y][pacman_x] = EMPTY;
@@ -141,70 +248,50 @@ void move(int move_x, int move_y) {
     draw();
 }
 
-
 void moveDemons() {
-    for (int i = 0; i < HEIGHT; i++) {
-        for (int j = 0; j < WIDTH; j++) {
-            if (board[i][j] == DEMON) {
-                int dx = pacman_x - j;
-                int dy = pacman_y - i;
-                int distance = abs(dx) + abs(dy);
+    for (auto& demon : demons) {
+        // Restore tile beneath demon before moving
+        board[demon.y][demon.x] = demon.underTile;
 
-                if (distance <= 5) {
-                    if (abs(dx) > abs(dy)) {
-                        if (dx > 0 && board[i][j + 1] != WALL && board[i][j + 1] != DEMON) {
-                            if (board[i][j + 1] == PACMAN && !invincible) {
-                                res = 1;
-                                return;
-                            }
-                            board[i][j] = EMPTY;
-                            board[i][j + 1] = DEMON;
-                        } else if (dx < 0 && board[i][j - 1] != WALL && board[i][j - 1] != DEMON) {
-                            if (board[i][j - 1] == PACMAN && !invincible) {
-                                res = 1;
-                                return;
-                            }
-                            board[i][j] = EMPTY;
-                            board[i][j - 1] = DEMON;
-                        }
-                    } else {
-                        if (dy > 0 && board[i + 1][j] != WALL && board[i + 1][j] != DEMON) {
-                            if (board[i + 1][j] == PACMAN && !invincible) {
-                                res = 1;
-                                return;
-                            }
-                            board[i][j] = EMPTY;
-                            board[i + 1][j] = DEMON;
-                        } else if (dy < 0 && board[i - 1][j] != WALL && board[i - 1][j] != DEMON) {
-                            if (board[i - 1][j] == PACMAN && !invincible) {
-                                res = 1;
-                                return;
-                            }
-                            board[i][j] = EMPTY;
-                            board[i - 1][j] = DEMON;
-                        }
-                    }
-                } else {
-                    int direction = rand() % 4;
-                    int new_i = i, new_j = j;
-                    switch (direction) {
-                        case 0: new_i--; break;
-                        case 1: new_i++; break;
-                        case 2: new_j--; break;
-                        case 3: new_j++; break;
-                    }
-                    if (new_i >= 0 && new_i < HEIGHT && new_j >= 0 && new_j < WIDTH &&
-                        board[new_i][new_j] != WALL && board[new_i][new_j] != DEMON) {
-                        if (board[new_i][new_j] == PACMAN && !invincible) {
-                            res = 1;
-                            return;
-                        }
-                        board[i][j] = EMPTY;
-                        board[new_i][new_j] = DEMON;
-                    }
-                }
+        Point nextStep;
+        int dist = abs(demon.x - pacman_x) + abs(demon.y - pacman_y);
+
+        // BFS pathfinding if within range (or flee if invincible)
+        if (dist <= 12 && !invincible) {
+            nextStep = getNextBfsStep(demon.y, demon.x, pacman_y, pacman_x);
+        } else {
+            // Random exploratory step
+            int dirs[4][2] = {{-1,0}, {1,0}, {0,-1}, {0,1}};
+            int r = rand() % 4;
+            int ny = demon.y + dirs[r][0];
+            int nx = demon.x + dirs[r][1];
+
+            if (ny > 0 && ny < HEIGHT - 1 && nx > 0 && nx < WIDTH - 1 && board[ny][nx] != WALL) {
+                nextStep = {ny, nx};
+            } else {
+                nextStep = {demon.y, demon.x};
             }
         }
+
+        // Check Pacman collision
+        if (nextStep.y == pacman_y && nextStep.x == pacman_x) {
+            if (!invincible) {
+                res = 1;
+                return;
+            } else {
+                score += 50;
+                demon.y = 1;
+                demon.x = 1;
+                demon.underTile = EMPTY;
+                board[1][1] = DEMON;
+                continue;
+            }
+        }
+
+        demon.y = nextStep.y;
+        demon.x = nextStep.x;
+        demon.underTile = (board[demon.y][demon.x] == DEMON) ? EMPTY : board[demon.y][demon.x];
+        board[demon.y][demon.x] = DEMON;
     }
 }
 
@@ -225,7 +312,7 @@ void placeFood() {
     while (food < MIN_FOOD) {
         for (int i = 1; i < HEIGHT - 1; i++) {
             for (int j = 1; j < WIDTH - 1; j++) {
-                if (board[i][j] == EMPTY && rand() % 5 == 0) {
+                if (board[i][j] == EMPTY && rand() % 4 == 0) {
                     board[i][j] = FOOD;
                     food++;
                     if (food >= MIN_FOOD) break;
@@ -239,35 +326,63 @@ void placeFood() {
 void showGameOver(bool win) {
     system("cls");
     if (win) {
-        std::cout << "\033[1;32mYOU WIN!\033[0m\n";
+        std::cout << "\n\n  \033[1;32m====================================\033[0m\n";
+        std::cout << "  \033[1;32m  LEVEL " << level << " CLEARED! BONUS +200 PTS  \033[0m\n";
+        std::cout << "  \033[1;32m====================================\033[0m\n\n";
+        Beep(800, 200); Beep(1000, 200); Beep(1200, 300);
+        Sleep(1500);
     } else {
-        std::cout << "\033[1;31mGAME OVER!\033[0m\n";
+        if (score > highScore) highScore = score;
+        std::cout << "\n\n  \033[1;31m====================================\033[0m\n";
+        std::cout << "  \033[1;31m             GAME OVER!             \033[0m\n";
+        std::cout << "  \033[1;31m====================================\033[0m\n";
+        std::cout << "   Final Score: " << score << "\n";
+        std::cout << "   High Score:  " << highScore << "\n\n";
+        Beep(400, 300); Beep(300, 500);
+        Sleep(2000);
     }
-    std::cout << "Your Score: " << score << "\n";
-    Sleep(2000); 
 }
 
 void pauseGame() {
     paused = !paused;
-    if (paused) {
-        std::cout << "Game Paused. Press 'p' to resume.\n";
-    } else {
-        draw();
-    }
+    draw();
 }
 
 int main() {
-    std::srand(std::time(0));
-    initialize();
-    draw(); 
+    std::srand((unsigned int)std::time(0));
+    hideCursor();
+    system("cls");
+    initialize(level);
+    draw();
+
+    DWORD lastGhostMove = GetTickCount();
+
     while (true) {
-        if (res == 1) {
+        if (res == 1) { // Player Died
             showGameOver(false);
-            break;
+            std::cout << "Play Again? (Y/N): ";
+            char choice;
+            std::cin >> choice;
+            if (choice == 'y' || choice == 'Y') {
+                score = 0;
+                level = 1;
+                system("cls");
+                initialize(level);
+                draw();
+                continue;
+            } else {
+                break;
+            }
         }
-        if (res == 2) {
+
+        if (res == 2) { // Level Cleared!
+            score += 200;
             showGameOver(true);
-            break;
+            level++;
+            system("cls");
+            initialize(level);
+            draw();
+            continue;
         }
 
         if (invincible) {
@@ -279,20 +394,26 @@ int main() {
 
         if (_kbhit()) { 
             char ch = _getch();
-            switch (ch) {
-                case 'w': move(0, -1); break;
-                case 's': move(0, 1); break;
-                case 'a': move(-1, 0); break;
-                case 'd': move(1, 0); break;
+            switch (tolower(ch)) {
+                case 'w': movePacman(0, -1); break;
+                case 's': movePacman(0, 1); break;
+                case 'a': movePacman(-1, 0); break;
+                case 'd': movePacman(1, 0); break;
                 case 'p': pauseGame(); break;
                 case 'q': return 0;
             }
         }
 
         if (!paused) {
-            moveDemons();
-            Sleep(demonSpeed);
+            DWORD now = GetTickCount();
+            if (now - lastGhostMove >= (DWORD)demonSpeed) {
+                moveDemons();
+                draw();
+                lastGhostMove = now;
+            }
         }
+
+        Sleep(30);
     }
     return 0;
 }
