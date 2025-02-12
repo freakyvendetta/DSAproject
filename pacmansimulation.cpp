@@ -110,10 +110,14 @@ void selectDifficultyMenu() {
     std::cout << pad << "  Enter Choice (1-3): ";
 
     flushInputBuffer();
-    char choice = _getch();
+    char choice = 0;
+    while (choice != '1' && choice != '2' && choice != '3') {
+        choice = _getch();
+    }
+
     if (choice == '1') selectedDifficulty = EASY;
+    else if (choice == '2') selectedDifficulty = MEDIUM;
     else if (choice == '3') selectedDifficulty = HARD;
-    else selectedDifficulty = MEDIUM;
 
     system("cls");
 }
@@ -266,21 +270,21 @@ void draw() {
         std::cout << line << "\n";
     }
 
-    std::string infoPad = getCenterPadding(52);
+    std::string infoPad = getCenterPadding(66);
     std::string diffStr = (selectedDifficulty == EASY) ? "EASY" : (selectedDifficulty == HARD ? "HARD" : "MEDIUM");
 
     std::cout << infoPad << "Score: " << score << " | High Score: " << std::max(score, highScore) 
-              << " | Food Left: " << food << "        \n";
+              << " | Food Left: " << food << "                              \n";
     std::cout << infoPad << "Mode: " << diffStr << " | Level: " << level << " | Invincible: ";
     if (invincible) {
-        std::cout << "\033[1;36mYES (" << invincibleTimeLeft << "s)\033[0m       \n";
+        std::cout << "\033[1;36mYES (" << invincibleTimeLeft << "s)\033[0m                                 \n";
     } else {
-        std::cout << "NO           \n";
+        std::cout << "NO                                         \n";
     }
     if (paused) {
-        std::cout << infoPad << "\033[1;33m*** GAME PAUSED *** (Press 'P' to Resume)\033[0m          \n";
+        std::cout << infoPad << "\033[1;33m*** GAME PAUSED *** (Press 'P' to Resume | Q = Quit)\033[0m                 \n";
     } else {
-        std::cout << infoPad << "Controls: ARROWS / WASD = Move | P = Pause | Q = Quit             \n";
+        std::cout << infoPad << "Controls: ARROWS / WASD = Move | P = Pause | Q = Quit                        \n";
     }
 }
 
