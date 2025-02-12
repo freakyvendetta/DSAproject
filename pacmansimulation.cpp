@@ -16,7 +16,7 @@
 #define DEMON 'X'
 #define POWERUP 'P'
 #define INVINCIBILITY_DURATION_MS 10000  // 10 real seconds
-#define MIN_FOOD 50 
+#define TARGET_FOOD_COUNT 140            // Rich food density across maze
 
 struct Demon {
     int y, x;
@@ -149,7 +149,7 @@ void initialize(int currentLevel) {
     }
 
     // Procedural inner wall obstacles
-    int wallCount = 40 + (currentLevel - 1) * 8;
+    int wallCount = 35 + (currentLevel - 1) * 6;
     while (wallCount > 0) {
         int i = rand() % (HEIGHT - 2) + 1; 
         int j = rand() % (WIDTH - 2) + 1;
@@ -164,8 +164,8 @@ void initialize(int currentLevel) {
     pacman_y = HEIGHT / 2;
     board[pacman_y][pacman_x] = PACMAN;
 
-    // Spawn Demons
-    int demonCount = 4 + (currentLevel - 1) * 2;
+    // Spawn Demons (Level 1 = 4 demons, scaling to max 6)
+    int demonCount = std::min(6, 4 + (currentLevel - 1));
     while (demonCount > 0) {
         int i = rand() % (HEIGHT - 2) + 1;
         int j = rand() % (WIDTH - 2) + 1;
@@ -179,11 +179,22 @@ void initialize(int currentLevel) {
     placePowerUps();
     placeFood();
 
-    demonSpeed = std::max(150, 450 - (currentLevel - 1) * 50);
+    demonSpeed = std::max(150, 420 - (currentLevel - 1) * 40);
+}
+
+void drawBanner() {
+    std::cout << "\033[1;33m";
+    std::cout << "  ___   A R C A D E   P A C - M A N   ___\n";
+    std::cout << " / _ \\                               / _ \\\n";
+    std::cout << "| | | |  ==========================  | | | |\n";
+    std::cout << " \\___/   D S A   C + +   E N G I N E  \\___/\033[0m\n";
+    std::cout << "\033[1;36m========================================\033[0m\n";
 }
 
 void draw() {
     setCursorPosition(0, 0);
+
+    drawBanner();
 
     std::string buffer = "";
     for (int i = 0; i < HEIGHT; i++) {
@@ -211,7 +222,7 @@ void draw() {
 
     std::cout << buffer;
     std::cout << "Score: " << score << " | High Score: " << std::max(score, highScore) 
-              << " | Food Left: " << food << "\n";
+              << " | Food Left: " << food << "    \n";
     std::cout << "Level: " << level << " | Invincible: ";
     if (invincible) {
         std::cout << "\033[1;36mYES (" << invincibleTimeLeft << "s)\033[0m   \n";
@@ -221,7 +232,7 @@ void draw() {
     if (paused) {
         std::cout << "\033[1;33m*** GAME PAUSED *** (Press 'P' to Resume)\033[0m\n";
     } else {
-        std::cout << "Controls: W/A/S/D = Move | P = Pause | Q = Quit          \n";
+        std::cout << "Controls: ARROWS / WASD = Move | P = Pause | Q = Quit          \n";
     }
 }
 
@@ -236,7 +247,7 @@ void movePacman(int move_x, int move_y) {
     if (board[y][x] == FOOD) {
         score += 10;
         food--;
-        Beep(600, 30); 
+        Beep(600, 20); 
         if (food <= 0) {
             res = 2; // Level cleared!
             return;
@@ -247,13 +258,13 @@ void movePacman(int move_x, int move_y) {
             return;
         } else {
             score += 50;
-            Beep(1200, 80);
+            Beep(1200, 60);
         }
     } else if (board[y][x] == POWERUP) {
         invincible = true;
         invincibleEndTime = GetTickCount() + INVINCIBILITY_DURATION_MS;
         score += 20;
-        Beep(1000, 120); 
+        Beep(1000, 100); 
     }
 
     board[pacman_y][pacman_x] = EMPTY;
@@ -312,7 +323,7 @@ void moveDemons() {
 }
 
 void placePowerUps() {
-    int count = 3;
+    int count = 4;
     while (count > 0) {
         int i = rand() % (HEIGHT - 2) + 1;
         int j = rand() % (WIDTH - 2) + 1;
@@ -323,7 +334,7 @@ void placePowerUps() {
     }
 }
 
-// Evenly scatter food pellets across the ENTIRE board
+// Evenly scatter 140 food pellets across the ENTIRE board
 void placeFood() {
     food = 0;
     std::vector<Point> emptyCells;
@@ -338,7 +349,7 @@ void placeFood() {
     // Shuffle empty cells to scatter food randomly across the full maze
     std::random_shuffle(emptyCells.begin(), emptyCells.end());
 
-    int targetFood = std::min((int)emptyCells.size(), MIN_FOOD);
+    int targetFood = std::min((int)emptyCells.size(), TARGET_FOOD_COUNT);
     for (int k = 0; k < targetFood; k++) {
         int r = emptyCells[k].y;
         int c = emptyCells[k].x;
@@ -351,16 +362,16 @@ void showGameOver(bool win) {
     flushInputBuffer();
     system("cls");
     if (win) {
-        std::cout << "\n\n  \033[1;32m====================================\033[0m\n";
-        std::cout << "  \033[1;32m  LEVEL " << level << " CLEARED! BONUS +200 PTS  \033[0m\n";
-        std::cout << "  \033[1;32m====================================\033[0m\n\n";
+        std::cout << "\n\n  \033[1;32m========================================\033[0m\n";
+        std::cout << "  \033[1;32m   LEVEL " << level << " CLEARED! BONUS +200 PTS   \033[0m\n";
+        std::cout << "  \033[1;32m========================================\033[0m\n\n";
         Beep(800, 150); Beep(1000, 150); Beep(1200, 200);
         Sleep(1200);
     } else {
         if (score > highScore) highScore = score;
-        std::cout << "\n\n  \033[1;31m====================================\033[0m\n";
-        std::cout << "  \033[1;31m             GAME OVER!             \033[0m\n";
-        std::cout << "  \033[1;31m====================================\033[0m\n";
+        std::cout << "\n\n  \033[1;31m========================================\033[0m\n";
+        std::cout << "  \033[1;31m               GAME OVER!               \033[0m\n";
+        std::cout << "  \033[1;31m========================================\033[0m\n";
         std::cout << "   Final Score: " << score << "\n";
         std::cout << "   High Score:  " << highScore << "\n\n";
         Beep(400, 200); Beep(300, 400);
@@ -426,13 +437,23 @@ int main() {
 
         if (_kbhit()) { 
             char ch = _getch();
-            switch (tolower(ch)) {
-                case 'w': movePacman(0, -1); break;
-                case 's': movePacman(0, 1); break;
-                case 'a': movePacman(-1, 0); break;
-                case 'd': movePacman(1, 0); break;
-                case 'p': pauseGame(); break;
-                case 'q': return 0;
+            if (ch == -32 || ch == 224 || ch == 0) { // Arrow Keys Prefix
+                char arrow = _getch();
+                switch (arrow) {
+                    case 72: movePacman(0, -1); break; // UP
+                    case 80: movePacman(0, 1);  break; // DOWN
+                    case 75: movePacman(-1, 0); break; // LEFT
+                    case 77: movePacman(1, 0);  break; // RIGHT
+                }
+            } else {
+                switch (tolower(ch)) {
+                    case 'w': movePacman(0, -1); break;
+                    case 's': movePacman(0, 1); break;
+                    case 'a': movePacman(-1, 0); break;
+                    case 'd': movePacman(1, 0); break;
+                    case 'p': pauseGame(); break;
+                    case 'q': return 0;
+                }
             }
         }
 
